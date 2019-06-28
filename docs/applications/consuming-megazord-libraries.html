@@ -31,19 +31,18 @@
 <p>Each Rust component published by Application Services is conceptually a stand-alone library, but they
 all depend on a shared core of functionality for exposing Rust to Kotlin.  In order to allow easy interop
 between components, enable cross-component native-code Link Time Optimization, and reduce final application
-size, the Rust code for all components is compiled and distributed together as a single aggregate library
-which we have dubbed a <em>megazord library</em>.</p>
+size, the rust code for all components is compiled and distributed together as a single aggregate library
+which we have dubbed a <strong><em>megazord library</em></strong>.</p>
 <p>Each Application Services component is published as an Android ARchive (AAR) that contains the managed code
-for that component (<code>classes.jar</code>) and which depends on separate &quot;megazord&quot; AAR that contains all of the
-compiled Rust code (<code>libmegazord.so</code>). For an application that consumes multiple Application Services components,
+for that component (<code>classes.jar</code>) and which depends on a separate &quot;megazord&quot; AAR that contains all of the
+compiled rust code (<code>libmegazord.so</code>). For an application that consumes multiple Application Services components,
 the dependency graph thus looks like this:</p>
 <p><a href="https://docs.google.com/drawings/d/1owo4wo2F1ePlCq2NS0LmAOG4jRoT_eVBahGNeWHuhJY/"><img src="https://docs.google.com/drawings/d/e/2PACX-1vTA6wL3ibJRNjKXsmescTfKTx0w_fpr5NcDIF_4T5AsnZfCi8UEEcav8vibocSyKpHOQOk5ysiDBm-D/pub?w=727&amp;h=546" alt="megazord dependency diagram"></a></p>
 <p>While this setup is <em>mostly</em> transparent to the consuming application, there are a few points to be aware of
 which are outlined below.</p>
 <h2><a class="anchor" aria-hidden="true" id="initializing-shared-infrastructure"></a><a href="#initializing-shared-infrastructure" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Initializing Shared Infrastructure</h2>
 <p>The megazord AAR exposes a single additional JVM class, <code>mozilla.appservices.Megazord</code>, which the application
-should use to initialize shared infrastructure such as logging and networking. This would typically be done in the
-<code>Application.onCreate()</code> method, like so:</p>
+should initialize explicitly. This would typically be done in the <code>Application.onCreate()</code> method, like so:</p>
 <pre><code class="hljs css language-kotlin"><span class="hljs-keyword">import</span> mozilla.appservices.Megazord
 
 <span class="hljs-keyword">open</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Application</span> <span class="hljs-title">extends</span> <span class="hljs-title">android</span>.<span class="hljs-title">app</span>.<span class="hljs-title">Application</span> </span>{
@@ -62,6 +61,8 @@ rust code.</p>
 <span class="hljs-keyword">open</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Application</span> <span class="hljs-title">extends</span> <span class="hljs-title">android</span>.<span class="hljs-title">app</span>.<span class="hljs-title">Application</span> </span>{
     <span class="hljs-keyword">override</span> <span class="hljs-function"><span class="hljs-keyword">fun</span> <span class="hljs-title">onCreate</span><span class="hljs-params">()</span></span> {
       ...
+      Megazord.<span class="hljs-keyword">init</span>();
+      ...
       RustLog.enable()
       ...
     }
@@ -74,17 +75,20 @@ rust code.</p>
 <span class="hljs-keyword">open</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Application</span> <span class="hljs-title">extends</span> <span class="hljs-title">android</span>.<span class="hljs-title">app</span>.<span class="hljs-title">Application</span> </span>{
     <span class="hljs-keyword">override</span> <span class="hljs-function"><span class="hljs-keyword">fun</span> <span class="hljs-title">onCreate</span><span class="hljs-params">()</span></span> {
       ...
+      Megazord.<span class="hljs-keyword">init</span>();
+      ...
       RustHttpConfig.setClient(lazy { HttpURLConnectionClient() })
       ...
     }
 }
 </code></pre>
-<p>The configured settings will then be used by all rust components.</p>
+<p>The configured settings will then be used by all rust components provided by the megazord.</p>
 <h2><a class="anchor" aria-hidden="true" id="using-a-custom-megazord"></a><a href="#using-a-custom-megazord" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Using a custom Megazord</h2>
 <p>The default megazord library contains compiled rust code for <em>all</em> components published by Application Services.
-If the consuming application only uses a subset of those components, it's possible to reduces the size and load
-time of the application by using a custom-built megazord library containing only the required components.</p>
-<p>First, you will need to select an appropriate megazord. Application Services publishes several custom megazords for existing applications:</p>
+If the consuming application only uses a subset of those components, it's possible to its package size and load
+time by using a custom-built megazord library containing only the required components.</p>
+<p>First, you will need to select an appropriate custom megazord. Application Services publishes several custom megazords
+to fit the needs of existing Firefox applications:</p>
 <table>
 <thead>
 <tr><th>Name</th><th>Components</th><th>Maven publication</th></tr>
@@ -94,28 +98,28 @@ time of the application by using a custom-built megazord library containing only
 <tr><td><code>fenix</code></td><td><code>fxaclient</code>, <code>logins</code>, <code>places</code></td><td><code>org.mozilla.appservices:fenix-megazord</code></td></tr>
 </tbody>
 </table>
-<p>If you would like a custom megazord for your project, please reach out via #rust-components in slack.</p>
-<p>Then, simply use gradle's support for <a href="https://docs.gradle.org/current/dsl/org.gradle.api.artifacts.DependencySubstitutions.html">depenedncy
+<p>Then, simply use gradle's builtin support for <a href="https://docs.gradle.org/current/dsl/org.gradle.api.artifacts.DependencySubstitutions.html">dependency
 substitution</a>
 to replace the default &quot;full megazord&quot; with your selected custom build:</p>
 <pre><code class="hljs css language-groovy">configurations.all {
   resolutionStrategy.dependencySubstitution {
     substitute module(<span class="hljs-string">"org.mozilla.appservices:full-megazord:X.Y.Z"</span>) with module(<span class="hljs-string">"org.mozilla.appservices:fenix-megazord:X.Y.Z"</span>)
   }
-}                                                                                           
+}
 </code></pre>
+<p>If you would like a new custom megazord for your project, please reach out via #rust-components in slack.</p>
 <h2><a class="anchor" aria-hidden="true" id="running-unit-tests"></a><a href="#running-unit-tests" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Running unit tests</h2>
 <p>Since the megazord library contains compiled native code, it cannot be used directly for running local unittests
 (it's compiled for the android target device, not for your development host machine). To support running unittests
 via the JVM on the host machine, we publish a special <code>forUnitTests</code> variant of the megazord library in which the
-native code is compiled for common desktop architectures.</p>
+native code is compiled into a JAR for common desktop architectures.</p>
 <p>Use dependency substitution to include it in your test configuration as follows:</p>
 <pre><code class="hljs css language-groovy">configurations.testImplementation.resolutionStrategy.dependencySubstitution {
   substitute module(<span class="hljs-string">"org.mozilla.appservices:full-megazord:X.Y.Z"</span>) with module(<span class="hljs-string">"org.mozilla.appservices:full-megazord-forUnitTests:X.Y.Z"</span>)
 }
 </code></pre>
 <p>If you are using a custom megazord library, substitute both the default and custom module with the <code>forUnitTests</code>
-variant:</p>
+variant of your custom megazord:</p>
 <pre><code class="hljs css language-groovy">configurations.testImplementation.resolutionStrategy.dependencySubstitution {
   substitute module(<span class="hljs-string">"org.mozilla.appservices:full-megazord:X.Y.Z"</span>) with module(<span class="hljs-string">"org.mozilla.appservices:fenix-megazord-forUnitTests:X.Y.Z"</span>)
   substitute module(<span class="hljs-string">"org.mozilla.appservices:fenix-megazord:X.Y.Z"</span>) with module(<span class="hljs-string">"org.mozilla.appservices:fenix-megazord-forUnitTests:X.Y.Z"</span>)
