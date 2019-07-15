@@ -81,7 +81,7 @@ Define <code>self</code> variables to help save state for FxA:</p>
 in the web view.</p>
 <pre><code class="hljs css language-swift">fxa.getProfile() { result, error <span class="hljs-keyword">in</span>
     <span class="hljs-keyword">if</span> <span class="hljs-keyword">let</span> error = error <span class="hljs-keyword">as</span>? <span class="hljs-type">FxAError</span>, <span class="hljs-keyword">case</span> <span class="hljs-type">FxAError</span>.<span class="hljs-type">Unauthorized</span> = error {
-        fxa.beginOAuthFlow(scopes: [<span class="hljs-string">"profile"</span>, <span class="hljs-string">"https://identity.mozilla.com/apps/oldsync"</span>], wantsKeys: <span class="hljs-literal">true</span>) { result, error <span class="hljs-keyword">in</span>
+        fxa.beginOAuthFlow(scopes: [<span class="hljs-string">"profile"</span>, <span class="hljs-string">"https://identity.mozilla.com/apps/oldsync"</span>]) { result, error <span class="hljs-keyword">in</span>
             <span class="hljs-keyword">guard</span> <span class="hljs-keyword">let</span> authUrl = result <span class="hljs-keyword">else</span> { <span class="hljs-keyword">return</span> }
             <span class="hljs-type">DispatchQueue</span>.main.async {
                 <span class="hljs-keyword">self</span>.webView.load(<span class="hljs-type">URLRequest</span>(url: authUrl))
