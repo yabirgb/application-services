@@ -12,6 +12,7 @@ offers the following functionality:
 * Constant-time [string comparison](./src/constant_time.rs).
 * HTTP [Hawk Authentication](./src/hawk_crypto.rs) through the [rust-hawk crate](https://github.com/taskcluster/rust-hawk/).
 * HTTP [Encrypted Content-Encoding](./src/ece.rs) through the [ece crate](https://github.com/mozilla/rust-ece).
+* SDR (Secret Decoder Ring) [encryption and decryption](./src/sdr.rs).
 
 Under the hood, it is backed by Mozilla's [NSS](https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS) library,
 through bindings in the [nss](./nss/) crate. This has a number of advantages for our use-case:

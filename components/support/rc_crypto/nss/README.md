@@ -13,6 +13,7 @@ different given the different host language.  It provides:
 * Generation, import and export of [elliptic-curve keys](./src/ec.rs).
 * ECDH [key agreement](./src/ecdh.rs).
 * Constant-time [string comparison](./src/secport.rs).
+* SDR (Secret Decoder Ring) [encryption and decryption](./src/sdr.rs).
 
 Like the `crypto.subtle` API, these primitives are quite low-level and involve some subtlety in order to use correctly.
 Consumers should prefer the higher-level abstractions offered by the [rc_crypto](../) crate where possible.

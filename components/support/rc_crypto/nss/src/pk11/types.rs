@@ -9,7 +9,7 @@ use crate::{
 };
 use std::{
     convert::TryFrom,
-    ops::Deref,
+    ops::{Deref, DerefMut},
     os::raw::{c_int, c_uchar, c_uint, c_void},
     ptr,
 };
@@ -186,6 +186,12 @@ impl Deref for ScopedSECItem {
     #[inline]
     fn deref(&self) -> &nss_sys::SECItem {
         &self.wrapped
+    }
+}
+
+impl DerefMut for ScopedSECItem {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.wrapped
     }
 }
 
