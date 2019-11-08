@@ -193,7 +193,15 @@ macro_rules! implement_into_ffi_by_delegation {
 #[macro_export]
 macro_rules! define_string_destructor {
     ($mylib_destroy_string:ident) => {
-        #[doc = "Public destructor for strings managed by the other side of the FFI."]
+        /// Public destructor for strings managed by the other side of the FFI.
+        ///
+        /// # Safety
+        ///
+        /// This will free the string pointer it gets passed in as an argument,
+        /// and thus can be wildly unsafe if misused.
+        ///
+        /// See the documentation of `ffi_support::destroy_c_string` and
+        /// `ffi_support::define_string_destructor!` for further info.
         #[no_mangle]
         pub unsafe extern "C" fn $mylib_destroy_string(s: *mut std::os::raw::c_char) {
             // Note: This should never happen, but in the case of a bug aborting
@@ -232,16 +240,12 @@ macro_rules! define_string_destructor {
 macro_rules! define_box_destructor {
     ($T:ty, $destructor_name:ident) => {
         #[no_mangle]
-        pub unsafe extern "C" fn $destructor_name(v: *mut $T) {
+        pub extern "C" fn $destructor_name(v: Option<Box<$T>>) {
             // We should consider passing an error parameter in here rather than
             // aborting, but at the moment the only case where we do this
             // (interrupt handles) should never panic in Drop, so it's probably
             // fine.
-            $crate::abort_on_panic::with_abort_on_panic(|| {
-                if !v.is_null() {
-                    drop(Box::from_raw(v))
-                }
-            });
+            $crate::abort_on_panic::with_abort_on_panic(move || drop(v));
         }
     };
 }
