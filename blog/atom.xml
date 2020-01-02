@@ -7,7 +7,7 @@
     <link rel="alternate" href="https://mozilla.github.io/application-services/blog"/>
     <subtitle>The best place to stay up-to-date with the latest Firefox Application Services news and events.</subtitle>
     <logo>https://mozilla.github.io/application-services/img/app-services.svg</logo>
-    <rights>Copyright © 2019 Firefox Application Services</rights>
+    <rights>Copyright © 2020 Firefox Application Services</rights>
     <entry>
         <title type="html"><![CDATA[Making Firefox Accounts more transparent in Firefox]]></title>
         <id>https://mozilla.github.io/application-services/blog/2019/04/16/fxa-in-firefox.html</id>
