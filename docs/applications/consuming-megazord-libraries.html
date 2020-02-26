@@ -95,7 +95,6 @@ to fit the needs of existing Firefox applications:</p>
 </thead>
 <tbody>
 <tr><td><code>lockbox</code></td><td><code>fxaclient</code>, <code>logins</code></td><td><code>org.mozilla.appservices:lockbox-megazord</code></td></tr>
-<tr><td><code>fenix</code></td><td><code>fxaclient</code>, <code>logins</code>, <code>places</code></td><td><code>org.mozilla.appservices:fenix-megazord</code></td></tr>
 </tbody>
 </table>
 <p>Then, simply use gradle's builtin support for <a href="https://docs.gradle.org/current/userguide/customizing_dependency_resolution_behavior.html#sec:module_replacement">module replacement</a>
@@ -103,7 +102,7 @@ to replace the default &quot;full megazord&quot; with your selected custom build
 <pre><code class="hljs css language-groovy">dependencies {
   modules {
     module(<span class="hljs-string">'org.mozilla.appservices:full-megazord'</span>) {
-      replacedBy(<span class="hljs-string">'org.mozilla.appservices:fenix-megazord'</span>, <span class="hljs-string">'prefer the fenix megazord, to reduce final application size'</span>)
+      replacedBy(<span class="hljs-string">'org.mozilla.appservices:lockbox-megazord'</span>, <span class="hljs-string">'prefer the lockbox megazord, to reduce final application size'</span>)
     }
   }
 }
@@ -121,7 +120,7 @@ native code is compiled into a JAR for common desktop architectures.</p>
 </code></pre>
 <p>Or, if you are using a custom megazord library, like this:</p>
 <pre><code class="hljs css language-groovy">dependencies {
-  testImplementation <span class="hljs-string">"org.mozilla.appservices:fenix-megazord-forUnitTests:X.Y.Z"</span>
+  testImplementation <span class="hljs-string">"org.mozilla.appservices:lockbox-megazord-forUnitTests:X.Y.Z"</span>
 }
 </code></pre>
 <p>This will make the appropriate <code>.so</code> files available to your tests at runtime, without affecting the code
