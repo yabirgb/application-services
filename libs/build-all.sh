@@ -6,9 +6,9 @@ set -euvx
 # SQLCIPHER_SHA256="65144ca3ba4c0f9cd4bae8c20bb42f2b84424bf29d1ebcf04c44a728903b1faa"
 
 NSS="nss-3.49.2"
-NSS_ARCHIVE="nss-3.49.2-with-nspr-4.24.tar.gz"
-NSS_URL="http://ftp.mozilla.org/pub/security/nss/releases/NSS_3_49_2_RTM/src/${NSS_ARCHIVE}"
-NSS_SHA256="a374009f38d1d8a2e301a6ff3c0007bbf5ddaabcc5f86abdbca34f4e7898bb7c"
+# NSS_ARCHIVE="nss-3.49.2-with-nspr-4.24.tar.gz"
+# NSS_URL="http://ftp.mozilla.org/pub/security/nss/releases/NSS_3_49_2_RTM/src/${NSS_ARCHIVE}"
+# NSS_SHA256="a374009f38d1d8a2e301a6ff3c0007bbf5ddaabcc5f86abdbca34f4e7898bb7c"
 
 # End of configuration.
 
@@ -64,14 +64,16 @@ SQLCIPHER_SRC_PATH=$(abspath "sqlcipher")
 # SQLCIPHER_SRC_PATH=$(abspath "sqlcipher-${SQLCIPHER_VERSION}")
 
 rm -rf "${NSS}"
-if [[ ! -e "${NSS_ARCHIVE}" ]]; then
-  echo "Downloading ${NSS_ARCHIVE}"
-  curl -sfSL --retry 5 --retry-delay 10 -O "${NSS_URL}"
-else
-  echo "Using ${NSS_ARCHIVE}"
-fi
-echo "${NSS_SHA256}  ${NSS_ARCHIVE}" | shasum -a 256 -c - || exit 2
-tar xfz "${NSS_ARCHIVE}"
+# if [[ ! -e "${NSS_ARCHIVE}" ]]; then
+#   echo "Downloading ${NSS_ARCHIVE}"
+#   curl -sfSL --retry 5 --retry-delay 10 -O "${NSS_URL}"
+# else
+#   echo "Using ${NSS_ARCHIVE}"
+# fi
+# echo "${NSS_SHA256}  ${NSS_ARCHIVE}" | shasum -a 256 -c - || exit 2
+# tar xfz "${NSS_ARCHIVE}"
+hg clone https://hg.mozilla.org/projects/nss/ -r 2c989888dee7512662365910c9f7f96f11816aba "${NSS}"/nss
+hg clone https://hg.mozilla.org/projects/nspr/ -r 219d131499d57b02c0ed9b788dbeffd7e75e2fe4 "${NSS}"/nspr
 NSS_SRC_PATH=$(abspath "${NSS}")
 
 # Some NSS symbols clash with OpenSSL symbols, rename them using
