@@ -1373,8 +1373,9 @@ mod tests {
         })
         .unwrap();
 
+        let unique_login_guid = Guid::empty();
         let unique_login = Login {
-            guid: Guid::empty(),
+            guid: unique_login_guid.clone(),
             form_submit_url: None,
             hostname: "https://www.example.com".into(),
             http_realm: Some("https://www.example.com".into()),
@@ -1390,6 +1391,16 @@ mod tests {
             http_realm: None,
             username: "test".into(),
             password: "test2".into(),
+            ..Login::default()
+        };
+
+        let updated_login = Login {
+            guid: unique_login_guid,
+            form_submit_url: None,
+            hostname: "https://www.example.com".into(),
+            http_realm: Some("https://www.example.com".into()),
+            username: "test".into(),
+            password: "test4".into(),
             ..Login::default()
         };
 
@@ -1409,6 +1420,11 @@ mod tests {
                 login: duplicate_login,
                 should_err: true,
                 expected_err: "Invalid login: Login already exists",
+            },
+            TestCase {
+                login: updated_login,
+                should_err: false,
+                expected_err: "",
             },
         ];
 
