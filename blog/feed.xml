@@ -5,8 +5,8 @@
         <link>https://mozilla.github.io/application-services/blog</link>
         <description>The best place to stay up-to-date with the latest Firefox Application Services news and events.</description>
         <lastBuildDate>Tue, 16 Apr 2019 06:00:00 GMT</lastBuildDate>
-        <docs>http://blogs.law.harvard.edu/tech/rss</docs>
-        <generator>Feed for Node.js</generator>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://github.com/jpmonette/feed</generator>
         <image>
             <title>Firefox Application Services Blog</title>
             <url>https://mozilla.github.io/application-services/img/app-services.svg</url>
