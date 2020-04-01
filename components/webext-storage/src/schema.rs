@@ -18,6 +18,7 @@ use sql_support::ConnExt;
 const VERSION: i64 = 1; // let's avoid bumping this and migrating for now!
 
 const CREATE_SCHEMA_SQL: &str = include_str!("../sql/create_schema.sql");
+const CREATE_TEMP_TABLES_SQL: &str = include_str!("../sql/create_temp_tables.sql");
 
 fn get_current_schema_version(db: &Connection) -> Result<i64> {
     Ok(db.query_one::<i64>("PRAGMA user_version")?)
@@ -42,11 +43,13 @@ pub fn init(db: &Connection) -> Result<()> {
             // database.
             db.execute_batch(&format!("PRAGMA user_version = {};", VERSION))?;
         }
+        create(db)?;
     }
+    create_temp_tables(db)?;
     Ok(())
 }
 
-pub fn create(db: &Connection) -> Result<()> {
+fn create(db: &Connection) -> Result<()> {
     log::debug!("Creating schema");
     db.execute_batch(CREATE_SCHEMA_SQL)?;
     db.execute(
@@ -54,6 +57,12 @@ pub fn create(db: &Connection) -> Result<()> {
         NO_PARAMS,
     )?;
 
+    Ok(())
+}
+
+fn create_temp_tables(db: &Connection) -> Result<()> {
+    log::debug!("Creating schema");
+    db.execute_batch(CREATE_TEMP_TABLES_SQL)?;
     Ok(())
 }
 

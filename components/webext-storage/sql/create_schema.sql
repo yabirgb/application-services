@@ -5,18 +5,19 @@
 -- This is a very simple schema.
 CREATE TABLE IF NOT EXISTS moz_extension_data (
     ext_id TEXT PRIMARY KEY,
-    /* The JSON payload. not null because we prefer to delete the row (possibly
-       creating a tombstone) than null it */
-    data TEXT NOT NULL,
+    -- The JSON payload. NULL means a tombstone (but see the CHECK below)
+    data TEXT,
 
-    /* Same "sync status" strategy used by other components. */
-    syncStatus INTEGER NOT NULL DEFAULT 0,
-    syncChangeCounter INTEGER NOT NULL DEFAULT 1
+    -- Same "sync status" strategy used by places components.
+    sync_status INTEGER NOT NULL DEFAULT 1, -- 1 == SyncStatus::New
+    sync_change_counter INTEGER NOT NULL DEFAULT 1,
+
+    -- We only keep tombstones for items with a sync_status of Normal (and only
+    -- then until we upload the tombstone to the server. Enforce that.
+    CHECK(sync_status = 2 OR data IS NOT NULL)
 ) WITHOUT ROWID;
 
-CREATE TABLE IF NOT EXISTS moz_extension_data_tombstones (
-    guid TEXT PRIMARY KEY
-) WITHOUT ROWID;
+/* index on sync_status? */
 
 CREATE TABLE IF NOT EXISTS moz_extension_data_mirror (
     guid TEXT PRIMARY KEY,
@@ -28,6 +29,8 @@ CREATE TABLE IF NOT EXISTS moz_extension_data_mirror (
     */
     ext_id TEXT NOT NULL UNIQUE,
 
+    /* Timestamp as recorded by the server */
+    server_modified INTEGER NOT NULL,
     /* The JSON payload. We *do* allow NULL here - it means "deleted" */
     data TEXT
 ) WITHOUT ROWID;

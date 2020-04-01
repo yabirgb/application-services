@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::error::*;
+use crate::sync::SyncStatus;
 use rusqlite::Connection;
 use serde_derive::Serialize;
 use serde_json::{Map, Value as JsonValue};
@@ -45,12 +46,15 @@ fn save_to_db(conn: &Connection, ext_id: &str, val: &JsonValue) -> Result<()> {
     }
     // XXX - work out how to get use these bytes directly instead of sval, so
     // we don't utf-8 encode twice!
-
-    // XXX - sync support will need to do the syncStatus thing here.
     conn.execute_named(
-        "INSERT OR REPLACE INTO moz_extension_data(ext_id, data)
-            VALUES (:ext_id, :data)",
-        &[(":ext_id", &ext_id), (":data", &sval)],
+        "INSERT OR REPLACE INTO moz_extension_data(ext_id, data, sync_status, sync_change_counter)
+            VALUES (:ext_id, :data, :sync_status,
+                    IFNULL((SELECT sync_change_counter FROM moz_extension_data WHERE ext_id = :ext_id), 0) + 1)",
+        &[(":ext_id", &ext_id),
+          (":data", &sval),
+          (":data", &sval),
+          (":sync_status", &(SyncStatus::New as u8)),
+          ],
     )?;
     Ok(())
 }
