@@ -13,7 +13,7 @@ use sync_guid::Guid as SyncGuid;
 
 use crate::error::*;
 
-use super::{merge, JsonMap, ServerPayload};
+use super::{merge, JsonMap, ServerPayload, SyncStatus};
 
 // This module deals exclusively with the Map inside a JsonValue::Object().
 // This helper reads such a Map from a SQL row, ignoring anything which is\
@@ -191,8 +191,9 @@ pub fn plan_incoming(s: IncomingState) -> IncomingAction {
                 }
                 (None, _, _) => {
                     // Deleted remotely. Server wins.
-                    // XXX - WRONG - we might want to 3 way merge
-                    // here still? Deleted doesn't mean "deleted forever"?
+                    // XXX - WRONG - we want to 3 way merge here still!
+                    // Eg, final key removed remotely, different key added
+                    // locally, the new key should still be added.
                     IncomingAction::DeleteLocally
                 }
             }
@@ -241,6 +242,64 @@ pub fn plan_incoming(s: IncomingState) -> IncomingAction {
             }
         }
     }
+}
+
+pub fn apply_actions<S: ?Sized + Interruptee>(
+    conn: &Connection,
+    actions: Vec<(IncomingItem, IncomingAction)>,
+    signal: &S,
+) -> Result<()> {
+    let cext = conn.conn();
+    let tx = cext.unchecked_transaction()?;
+    for (item, action) in actions {
+        signal.err_if_interrupted()?;
+
+        // XXX - change counter should be updated here!
+        match action {
+            IncomingAction::DeleteLocally => {
+                // Can just nuke it entirely.
+                cext.execute_named_cached(
+                    "DELETE FROM moz_extension_data WHERE ext_id = :ext_id",
+                    &[(":ext_id", &item.ext_id)],
+                )?;
+            }
+            // We should remotely delete the data for this record.
+            IncomingAction::DeleteRemotely => {
+                // The local record is probably already in this state, but let's
+                // be sure.
+                cext.execute_named_cached(
+                    "UPDATE moz_extension_data SET data = NULL, sync_status = :sync_status_new WHERE ext_id = :ext_id",
+                    &[
+                        (":ext_id", &item.ext_id),
+                        (":sync_status_new", &(SyncStatus::New as u8)),
+                    ]
+                )?;
+            }
+            // We want to update the local record with 'data' and after this update the item no longer is considered dirty.
+            IncomingAction::TakeRemote { data } | IncomingAction::Merge { data } => {
+                cext.execute_named_cached(
+                    "UPDATE moz_extension_data SET data = :data, sync_status = :sync_status_normal WHERE ext_id = :ext_id",
+                    &[
+                        (":ext_id", &item.ext_id),
+                        (":sync_status_normal", &(SyncStatus::Normal as u8)),
+                        (":data", &serde_json::Value::Object(data).as_str()),
+                    ]
+                )?;
+            }
+            // We merged this data - the existing data is fine, but there's no point considering it dirty.
+            IncomingAction::Same => {
+                cext.execute_named_cached(
+                    "UPDATE moz_extension_data SET data = :data, sync_status = :sync_status_normal WHERE ext_id = :ext_id",
+                    &[
+                        (":ext_id", &item.ext_id),
+                        (":sync_status_normal", &(SyncStatus::Normal as u8)),
+                    ]
+                )?;
+            }
+        }
+    }
+    tx.commit()?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -423,4 +482,6 @@ mod tests {
         );
         Ok(())
     }
+
+    // XXX - test apply_actions!
 }
