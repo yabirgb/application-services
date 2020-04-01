@@ -56,6 +56,11 @@ where
 }
 
 // Perform a 2-way or 3-way merge, where the incoming value wins on confict.
+// XXX - this needs more thought, and probably needs significant changes.
+// Main problem is that it doesn't handle deletions - but to do that, we need
+// something other than a simple Option<JsonMap> - we need to differentiate
+// "doesn't exist" from "removed".
+// TODO!
 fn merge(other: JsonMap, mut ours: JsonMap, parent: Option<JsonMap>) -> IncomingAction {
     if other == ours {
         return IncomingAction::Same;
