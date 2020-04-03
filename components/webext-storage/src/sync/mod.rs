@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 mod incoming;
+mod outgoing;
 
 use serde_derive::*;
 use serde_json;
@@ -38,21 +39,10 @@ struct ServerPayload {
     guid: SyncGuid,
     ext_id: String,
     #[serde(default, skip_serializing_if = "is_default")]
-    #[serde(deserialize_with = "deserialize_map")]
-    data: JsonMap,
+    data: Option<String>,
     #[serde(default, skip_serializing_if = "is_default")]
     deleted: bool,
     last_modified: ServerTimestamp,
-}
-
-// We want to deserialize as a normal JSON object, but always return a Map.
-fn deserialize_map<'de, D>(deserializer: D) -> std::result::Result<JsonMap, D::Error>
-where
-    D: serde::de::Deserializer<'de>,
-{
-    use serde::de::Deserialize;
-    serde_json::Value::deserialize(deserializer)
-        .map(|v| v.as_object().cloned().unwrap_or_else(JsonMap::new))
 }
 
 // Perform a 2-way or 3-way merge, where the incoming value wins on confict.

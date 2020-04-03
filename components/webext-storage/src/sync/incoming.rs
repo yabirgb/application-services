@@ -37,9 +37,9 @@ fn json_map_from_row(row: &Row<'_>, col: &str) -> Result<Option<JsonMap>> {
 
 /// The first thing we do with incoming items is to "stage" them in a temp table.
 /// The actual processing is done via this table.
-pub fn stage_incoming_json<S: ?Sized + Interruptee>(
+fn stage_incoming<S: ?Sized + Interruptee>(
     conn: &Connection,
-    incoming_cleartexts: &[String],
+    incoming_bsos: Vec<ServerPayload>,
     signal: &S,
 ) -> Result<()> {
     // markh always struggles with the sql_support chunking :( So take the
@@ -50,22 +50,14 @@ pub fn stage_incoming_json<S: ?Sized + Interruptee>(
         INSERT OR REPLACE INTO temp.moz_extension_data_staging
         (guid, ext_id, data, server_modified)
         VALUES (:guid, :ext_id, :data, :ts)";
-    for ct in incoming_cleartexts {
+    for bso in incoming_bsos {
         signal.err_if_interrupted()?;
-        let bso: ServerPayload = serde_json::from_str(ct)?;
         cext.execute_named_cached(
             &sql,
             &[
                 (":guid", &bso.guid as &dyn ToSql),
                 (":ext_id", &bso.ext_id),
-                (
-                    ":data",
-                    &(if bso.deleted {
-                        None
-                    } else {
-                        Some(serde_json::Value::Object(bso.data).to_string())
-                    }),
-                ),
+                (":data", &bso.data),
                 (":ts", &bso.last_modified.as_millis()),
             ],
         )?;
@@ -318,11 +310,11 @@ mod tests {
         count.unwrap().unwrap()
     }
 
-    fn array_to_incoming(array: &Value) -> Vec<String> {
-        let jv = array.as_array().expect("you must pass a json array");
+    fn array_to_incoming(mut array: Value) -> Vec<ServerPayload> {
+        let jv = array.as_array_mut().expect("you must pass a json array");
         let mut result = Vec::with_capacity(jv.len());
         for elt in jv {
-            result.push(elt.to_string());
+            result.push(serde_json::from_value(elt.take()).expect("must be valid"));
         }
         result
     }
@@ -348,7 +340,7 @@ mod tests {
             }
         ]};
 
-        stage_incoming_json(&conn, &array_to_incoming(&incoming), &NeverInterrupts)?;
+        stage_incoming(&conn, array_to_incoming(incoming), &NeverInterrupts)?;
         // check staging table
         assert_eq!(
             ssi(
