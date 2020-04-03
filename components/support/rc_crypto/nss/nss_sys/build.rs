@@ -7,7 +7,6 @@ use serde_derive::Deserialize;
 use std::{env, fs, path::PathBuf, process::Command};
 use toml;
 
-#[cfg(not(feature = "gecko"))]
 use nss_build_common::*;
 
 const BINDINGS_DIR: &str = "bindings";
@@ -39,12 +38,10 @@ struct Bindings {
     exclude: Option<Vec<String>>,
 }
 
-#[cfg(not(feature = "gecko"))]
 const DEFAULT_ANDROID_NDK_API_VERSION: &str = "21";
 
 // Set the CLANG_PATH env variable to point to the right clang for the NDK in question.
 // Note that this basically needs to be done first thing in main.
-#[cfg(not(feature = "gecko"))]
 fn maybe_setup_ndk_clang_path() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").ok();
     if target_os.as_ref().map_or(false, |x| x == "android") {
@@ -70,8 +67,15 @@ fn maybe_setup_ndk_clang_path() {
     }
 }
 
-#[cfg(not(feature = "gecko"))]
 fn main() {
+    if env::var_os("MOZ_TOPOBJDIR").is_some() {
+        main_gecko();
+    } else {
+        main_regular();
+    }
+}
+
+fn main_regular() {
     // Note: this has to be first!
     maybe_setup_ndk_clang_path();
     // 1. NSS linking.
@@ -90,8 +94,7 @@ fn main() {
     build_bindings(&bindings, &flags[..]);
 }
 
-#[cfg(feature = "gecko")]
-pub fn main() {
+pub fn main_gecko() {
     // 1. NSS linking.
     let libs = match env::var("CARGO_CFG_TARGET_OS")
         .as_ref()
@@ -169,7 +172,7 @@ fn build_bindings(bindings: &Bindings, flags: &[String]) {
     }
 
     // Fix our cross-compilation include directories.
-    if cfg!(not(feature = "gecko")) {
+    if env::var_os("MOZ_TOPOBJDIR").is_none() {
         builder = fix_include_dirs(builder);
     }
 
@@ -240,7 +243,6 @@ fn fix_include_dirs(mut builder: Builder) -> Builder {
     builder
 }
 
-#[cfg(not(feature = "gecko"))]
 fn android_host_tag() -> &'static str {
     // cfg! target_os actually refers to the host environment in this case (build script).
     #[cfg(target_os = "macos")]
