@@ -197,4 +197,15 @@ pub extern "C" fn viaduct_initialize(callback: FetchCallback) -> u8 {
     ffi_support::abort_on_panic::call_with_output(|| callback_holder::set_callback(callback))
 }
 
+#[no_mangle]
+pub extern "C" fn viaduct_send_request() {
+    let mut req = crate::Request::post(url::Url::parse("http://localhost:3000").unwrap());
+    req = req.json(&serde_json::json!({
+        "bobo": true,
+    }));
+    req = req.header("momo", "mocha").unwrap();
+    let resp = req.send().unwrap();
+    dbg!(resp.json::<serde_json::Value>().unwrap());
+}
+
 ffi_support::define_bytebuffer_destructor!(viaduct_destroy_bytebuffer);
