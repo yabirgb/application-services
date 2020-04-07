@@ -5,6 +5,9 @@
 mod incoming;
 mod outgoing;
 
+#[cfg(test)]
+mod sync_tests;
+
 use serde_derive::*;
 use serde_json;
 use sync15::ServerTimestamp;
@@ -35,7 +38,7 @@ pub fn is_default<T: PartialEq + Default>(v: &T) -> bool {
 // that's never actually stored in this way.
 // XXX - this isn't going to work without other changes.
 #[derive(Debug, Serialize, Deserialize)]
-struct ServerPayload {
+pub struct ServerPayload {
     guid: SyncGuid,
     ext_id: String,
     #[serde(default, skip_serializing_if = "is_default")]

@@ -17,14 +17,16 @@ use super::{ServerPayload, SyncStatus};
 
 // This is the "state" for outgoing items - it's so that after we POST the
 // outgoing records we can update the local DB.
+#[derive(Debug)]
 pub struct OutgoingStateHolder {
     ext_id: String,
     change_counter: i32,
 }
 
+#[derive(Debug)]
 pub struct OutgoingInfo {
-    state: OutgoingStateHolder,
-    payload: ServerPayload,
+    pub state: OutgoingStateHolder,
+    pub payload: ServerPayload,
 }
 
 impl OutgoingInfo {
@@ -45,7 +47,7 @@ impl OutgoingInfo {
                 change_counter: row.get("sync_change_counter")?,
             },
             payload: ServerPayload {
-                ext_id: ext_id,
+                ext_id,
                 guid,
                 data,
                 deleted,
@@ -69,34 +71,75 @@ pub fn get_outgoing<S: ?Sized + Interruptee>(
     let elts = conn
         .conn()
         .query_rows_and_then_named(sql, &[], OutgoingInfo::from_row)?;
+    log::debug!("get_outgoing found {} items", elts.len());
     Ok(elts)
 }
 
 pub fn record_uploaded<S: ?Sized + Interruptee>(
     conn: &Connection,
-    items: &[&OutgoingStateHolder],
+    items: &[OutgoingInfo],
     signal: &S,
 ) -> Result<()> {
     let cext = conn.conn();
     let tx = cext.unchecked_transaction()?;
+
+    log::debug!(
+        "record_uploaded recording that {} items were uploaded",
+        items.len()
+    );
 
     let sql = "
         UPDATE moz_extension_data SET
             sync_change_counter = (sync_change_counter - :old_counter),
             sync_status = :sync_status_normal
         WHERE ext_id = :ext_id;";
-    for state in items.iter() {
+    for item in items.iter() {
         signal.err_if_interrupted()?;
+        log::trace!(
+            "recording ext_id='{}' - {:?} was uploaded",
+            item.state.ext_id,
+            item.payload
+        );
         conn.execute_named(
             sql,
             rusqlite::named_params! {
-                ":old_counter": state.change_counter,
+                ":old_counter": item.state.change_counter,
                 ":sync_status_normal": SyncStatus::Normal as u8,
-                ":ext_id": state.ext_id,
+                ":ext_id": item.state.ext_id,
             },
         )?;
     }
 
+    // Copy staging into the mirror, then kill staging.
+    conn.execute_batch(
+        "
+    REPLACE INTO moz_extension_data_mirror (guid, ext_id, server_modified, data)
+    SELECT guid, ext_id, server_modified, data FROM temp.moz_extension_data_staging;
+
+    DELETE FROM temp.moz_extension_data_staging;
+    ",
+    )?;
+
+    // And the stuff that was uploaded should be places in the mirror.
+    // XXX - server_modified is wrong here - do we even need it in the schema?
+    let sql = "
+        REPLACE INTO moz_extension_data_mirror (guid, ext_id, server_modified, data)
+        VALUES (:guid, :ext_id, :server_modified, :data);
+    ";
+    for item in items.iter() {
+        signal.err_if_interrupted()?;
+        conn.execute_named(
+            sql,
+            rusqlite::named_params! {
+                ":guid": item.payload.guid,
+                ":ext_id": item.state.ext_id,
+                ":server_modified": item.payload.last_modified.0, // XXX - wrong!
+                ":data": item.payload.data,
+            },
+        )?;
+    }
+
+    log::debug!("record_uploaded committing");
     tx.commit()?;
     Ok(())
 }
@@ -126,7 +169,7 @@ mod tests {
         assert_eq!(changes.len(), 1);
         assert_eq!(changes[0].state.ext_id, "ext_with_changes".to_string());
 
-        record_uploaded(&conn, &[&changes[0].state], &NeverInterrupts)?;
+        record_uploaded(&conn, &changes, &NeverInterrupts)?;
 
         // let (counter, status): (i32, u8) = conn.query_row_and_then::<(i32, u8), _, _, _>(
         //     "SELECT sync_change_counter, sync_status FROM moz_extension_data WHERE ext_id = 'ext_with_changes'",

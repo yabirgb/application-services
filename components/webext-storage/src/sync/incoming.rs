@@ -16,7 +16,7 @@ use crate::error::*;
 use super::{merge, JsonMap, ServerPayload, SyncStatus};
 
 // This module deals exclusively with the Map inside a JsonValue::Object().
-// This helper reads such a Map from a SQL row, ignoring anything which is\
+// This helper reads such a Map from a SQL row, ignoring anything which is
 // either invalid JSON or a different JSON type.
 fn json_map_from_row(row: &Row<'_>, col: &str) -> Result<Option<JsonMap>> {
     let s = row.get::<_, Option<String>>(col)?;
@@ -37,7 +37,7 @@ fn json_map_from_row(row: &Row<'_>, col: &str) -> Result<Option<JsonMap>> {
 
 /// The first thing we do with incoming items is to "stage" them in a temp table.
 /// The actual processing is done via this table.
-fn stage_incoming<S: ?Sized + Interruptee>(
+pub fn stage_incoming<S: ?Sized + Interruptee>(
     conn: &Connection,
     incoming_bsos: Vec<ServerPayload>,
     signal: &S,
@@ -246,7 +246,8 @@ pub fn apply_actions<S: ?Sized + Interruptee>(
     for (item, action) in actions {
         signal.err_if_interrupted()?;
 
-        // XXX - change counter should be updated here!
+        log::trace!("action for '{}': {:?}", item.ext_id, action);
+        // XXX - change counter should be updated consistently here!
         match action {
             IncomingAction::DeleteLocally => {
                 // Can just nuke it entirely.
@@ -268,9 +269,9 @@ pub fn apply_actions<S: ?Sized + Interruptee>(
                 )?;
             }
             // We want to update the local record with 'data' and after this update the item no longer is considered dirty.
-            IncomingAction::TakeRemote { data } | IncomingAction::Merge { data } => {
+            IncomingAction::TakeRemote { data } => {
                 cext.execute_named_cached(
-                    "UPDATE moz_extension_data SET data = :data, sync_status = :sync_status_normal WHERE ext_id = :ext_id",
+                    "UPDATE moz_extension_data SET data = :data, sync_status = :sync_status_normal, sync_change_counter = 0 WHERE ext_id = :ext_id",
                     &[
                         (":ext_id", &item.ext_id),
                         (":sync_status_normal", &(SyncStatus::Normal as u8)),
@@ -278,16 +279,28 @@ pub fn apply_actions<S: ?Sized + Interruptee>(
                     ]
                 )?;
             }
-            // We merged this data - the existing data is fine, but there's no point considering it dirty.
-            IncomingAction::Same => {
+
+            // We merged this data, so need to update locally but still consider
+            // it dirty because the merged data must be uploaded.
+            IncomingAction::Merge { data } => {
+                println!(
+                    "DATA is {:?}, {:?}",
+                    data,
+                    serde_json::Value::Object(data.clone()).to_string()
+                );
                 cext.execute_named_cached(
-                    "UPDATE moz_extension_data SET data = :data, sync_status = :sync_status_normal WHERE ext_id = :ext_id",
+                    "UPDATE moz_extension_data SET data = :data, sync_status = :sync_status_normal, sync_change_counter = sync_change_counter + 1 WHERE ext_id = :ext_id",
                     &[
                         (":ext_id", &item.ext_id),
                         (":sync_status_normal", &(SyncStatus::Normal as u8)),
+                        (":data", &serde_json::Value::Object(data).to_string()),
                     ]
                 )?;
             }
+
+            // Both local and remote ended up the same - nothing to do.
+            // XXX - should probably drop the change counter to 0, right?
+            IncomingAction::Same => {}
         }
     }
     tx.commit()?;
