@@ -67,6 +67,42 @@ fn create_temp_tables(db: &Connection) -> Result<()> {
 }
 
 #[cfg(test)]
+pub mod test {
+    use prettytable::{Cell, Row};
+    use rusqlite::Result as RusqliteResult;
+    use rusqlite::{types::Value, Connection, NO_PARAMS};
+
+    // To help debugging tests etc.
+    #[allow(unused)]
+    pub fn print_table(conn: &Connection, table_name: &str) -> RusqliteResult<()> {
+        let mut stmt = conn.prepare(&format!("SELECT * FROM {}", table_name))?;
+        let mut rows = stmt.query(NO_PARAMS)?;
+        let mut table = prettytable::Table::new();
+        let mut titles = Row::empty();
+        for col in rows.columns().expect("must have columns") {
+            titles.add_cell(Cell::new(col.name()));
+        }
+        table.set_titles(titles);
+        while let Some(sql_row) = rows.next()? {
+            let mut table_row = Row::empty();
+            for i in 0..sql_row.column_count() {
+                let val = match sql_row.get::<_, Value>(i)? {
+                    Value::Null => "null".to_string(),
+                    Value::Integer(i) => i.to_string(),
+                    Value::Real(f) => f.to_string(),
+                    Value::Text(s) => s,
+                    Value::Blob(b) => format!("<blob with {} bytes>", b.len()),
+                };
+                table_row.add_cell(Cell::new(&val));
+            }
+            table.add_row(table_row);
+        }
+        table.printstd();
+        Ok(())
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::test::new_mem_db;

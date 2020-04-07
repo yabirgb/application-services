@@ -2903,6 +2903,7 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "nss_build_common",
+ "prettytable-rs",
  "rusqlite",
  "serde",
  "serde_derive",
