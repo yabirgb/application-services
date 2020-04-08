@@ -2,22 +2,27 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
--- This is a very simple schema.
+-- This is a very simple schema for a chrome.storage implementation. Even though
+-- the spec allows for a single extension to have any number of "keys", we've
+-- made the decision to store all keys for a given extension in a single row as
+-- a JSON representation of all keys and values.
+-- We've done this primarily due to:
+-- * The shape of the API is very JSON, and it almost encourages multiple keys
+--   to be fetched at one time.
+-- * The defined max sizes that extensions are allowed to store using this API
+--   is sufficiently small that we don't have many concerns around record sizes.
+-- * We'd strongly prefer to keep one record per extension when syncing this
+--   data, so having the local store in this shape makes syncing easier.
+
 CREATE TABLE IF NOT EXISTS moz_extension_data (
     ext_id TEXT PRIMARY KEY,
-    -- The JSON payload. NULL means a tombstone (but see the CHECK below)
+
+    /* The JSON payload. NULL means it's a tombstone */
     data TEXT,
 
-    -- Same "sync status" strategy used by places components.
-    sync_status INTEGER NOT NULL DEFAULT 1, -- 1 == SyncStatus::New
-    sync_change_counter INTEGER NOT NULL DEFAULT 1,
-
-    -- We only keep tombstones for items with a sync_status of Normal (and only
-    -- then until we upload the tombstone to the server. Enforce that.
-    CHECK(sync_status = 2 OR data IS NOT NULL)
+    /* Same "sync change counter" strategy used by other components. */
+    sync_change_counter INTEGER NOT NULL DEFAULT 1
 ) WITHOUT ROWID;
-
-/* index on sync_status? */
 
 CREATE TABLE IF NOT EXISTS moz_extension_data_mirror (
     guid TEXT PRIMARY KEY,

@@ -13,104 +13,65 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use url::Url;
 
-// These can't be consts as the `|` is actually a fn.
-fn get_write_flags() -> OpenFlags {
-    OpenFlags::SQLITE_OPEN_NO_MUTEX
-        | OpenFlags::SQLITE_OPEN_URI
-        | OpenFlags::SQLITE_OPEN_CREATE
-        | OpenFlags::SQLITE_OPEN_READ_WRITE
-}
-
-fn get_read_flags() -> OpenFlags {
-    OpenFlags::SQLITE_OPEN_NO_MUTEX | OpenFlags::SQLITE_OPEN_URI | OpenFlags::SQLITE_OPEN_READ_ONLY
-}
-
 /// The entry-point to getting a database connection. No enforcement of this
 /// as a singleton is made - that's up to the caller. If you make multiple
 /// StorageDbs pointing at the same physical database, you are going to have a
-/// bad time.
+/// bad time. We only support a single writer connection - so that's the only
+/// thing we store. It's still a bit overkill, but there's only so many yaks
+/// in a day.
 pub struct StorageDb {
-    db_path: PathBuf,
     pub writer: Arc<Mutex<Connection>>,
 }
 impl StorageDb {
     /// Create a new, or fetch an already open, StorageDb backed by a file on disk.
     pub fn new(db_path: impl AsRef<Path>) -> Result<Arc<Self>> {
         let db_path = normalize_path(db_path)?;
-        Self::new_or_existing(db_path)
+        Self::new_named(db_path)
     }
 
     /// Create a new, or fetch an already open, memory-based StorageDb. You must
     /// provide a name, but you are still able to have a single writer and many
     ///  reader connections to the same memory DB open.
+    #[cfg(test)]
     pub fn new_memory(db_path: &str) -> Result<Arc<Self>> {
         let name = PathBuf::from(format!("file:{}?mode=memory&cache=shared", db_path));
-        Self::new_or_existing(name)
+        Self::new_named(name)
     }
 
-    fn new_or_existing(db_path: PathBuf) -> Result<Arc<Self>> {
+    fn new_named(db_path: PathBuf) -> Result<Arc<Self>> {
         // We always create the read-write connection for an initial open so
         // we can create the schema and/or do version upgrades.
-        let conn = Connection::open_with_flags(db_path.clone(), get_write_flags())?;
+        let flags = OpenFlags::SQLITE_OPEN_NO_MUTEX
+            | OpenFlags::SQLITE_OPEN_URI
+            | OpenFlags::SQLITE_OPEN_CREATE
+            | OpenFlags::SQLITE_OPEN_READ_WRITE;
+
+        let conn = Connection::open_with_flags(db_path.clone(), flags)?;
         match init_sql_connection(&conn, true) {
             Ok(()) => Ok(Arc::new(Self {
-                db_path,
                 writer: Arc::new(Mutex::new(conn)),
             })),
             Err(e) => {
                 // like with places, failure to upgrade means "you lose your data"
                 if let ErrorKind::DatabaseUpgradeError = e.kind() {
                     fs::remove_file(&db_path)?;
-                    Self::new_or_existing(db_path)
+                    Self::new_named(db_path)
                 } else {
                     Err(e)
                 }
             }
         }
     }
-
-    /// Open a read-only connection to the database.
-    pub fn open_read_connection(&self) -> Result<Connection> {
-        let conn = Connection::open_with_flags(self.db_path.clone(), get_read_flags())?;
-        init_sql_connection(&conn, false)?;
-        Ok(conn)
-    }
-
-    /// Close a connection to the database. If the connection is the write
-    /// connection, you will have closed the only connection able to write, so
-    /// don't do that unless you are sure.
-    pub fn close_connection(&self, _conn: Connection) -> Result<()> {
-        Ok(())
-    }
 }
 
 fn init_sql_connection(conn: &Connection, is_writable: bool) -> Result<()> {
     let initial_pragmas = "
-        -- Cargo-culted from places.
-        PRAGMA page_size = 32768;
-
-        -- Disable calling mlock/munlock for every malloc/free.
-        -- In practice this results in a massive speedup, especially
-        -- for insert-heavy workloads.
-        -- XXX - is this relevant?
-        PRAGMA cipher_memory_security = false;
-
-        -- `temp_store = 2` - also cargo-culted - See both places and
-        -- https://github.com/mozilla/mentat/issues/505.
+        -- We don't care about temp tables being persisted to disk.
         PRAGMA temp_store = 2;
-
-        -- Moar cargo-cult.
-        PRAGMA cache_size = -6144;
-
-        -- We probably will end up needing foreign-key support
-        -- PRAGMA foreign_keys = ON;
-
         -- we unconditionally want write-ahead-logging mode
         PRAGMA journal_mode=WAL;
-
-        -- How often to autocheckpoint (in units of pages).
-        -- 2048000 (our max desired WAL size) / 32760 (page size).
-        PRAGMA wal_autocheckpoint=62
+        -- foreign keys seem worth enforcing!
+        PRAGMA foreign_keys = ON;
     ";
 
     conn.execute_batch(initial_pragmas)?;
@@ -259,12 +220,10 @@ mod tests {
     fn test_meta() -> Result<()> {
         let db = new_mem_db();
         let writer = db.writer.lock().unwrap();
-        let reader = db.open_read_connection()?;
-        assert_eq!(get_meta::<String>(&reader, "foo")?, None);
+        assert_eq!(get_meta::<String>(&writer, "foo")?, None);
         put_meta(&writer, "foo", &"bar".to_string())?;
-        assert_eq!(get_meta(&reader, "foo")?, Some("bar".to_string()));
+        assert_eq!(get_meta(&writer, "foo")?, Some("bar".to_string()));
         delete_meta(&writer, "foo")?;
-        // use the writer for this get_meta, because why not?
         assert_eq!(get_meta::<String>(&writer, "foo")?, None);
         Ok(())
     }
