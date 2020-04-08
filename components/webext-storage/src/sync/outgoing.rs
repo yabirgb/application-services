@@ -13,7 +13,7 @@ use sync_guid::Guid as SyncGuid;
 
 use crate::error::*;
 
-use super::{ServerPayload, SyncStatus};
+use super::ServerPayload;
 
 // This is the "state" for outgoing items - it's so that after we POST the
 // outgoing records we can update the local DB.
@@ -90,8 +90,7 @@ pub fn record_uploaded<S: ?Sized + Interruptee>(
 
     let sql = "
         UPDATE moz_extension_data SET
-            sync_change_counter = (sync_change_counter - :old_counter),
-            sync_status = :sync_status_normal
+            sync_change_counter = (sync_change_counter - :old_counter)
         WHERE ext_id = :ext_id;";
     for item in items.iter() {
         signal.err_if_interrupted()?;
@@ -104,7 +103,6 @@ pub fn record_uploaded<S: ?Sized + Interruptee>(
             sql,
             rusqlite::named_params! {
                 ":old_counter": item.state.change_counter,
-                ":sync_status_normal": SyncStatus::Normal as u8,
                 ":ext_id": item.state.ext_id,
             },
         )?;
@@ -157,10 +155,10 @@ mod tests {
 
         conn.execute_batch(
             r#"
-            INSERT INTO moz_extension_data (ext_id, data, sync_status, sync_change_counter)
+            INSERT INTO moz_extension_data (ext_id, data, sync_change_counter)
             VALUES
-                ('ext_no_changes', '{"foo":"bar"}', 2, 0),
-                ('ext_with_changes', '{"foo":"bar"}', 1, 1);
+                ('ext_no_changes', '{"foo":"bar"}', 0),
+                ('ext_with_changes', '{"foo":"bar"}', 1);
 
         "#,
         )?;
@@ -180,11 +178,6 @@ mod tests {
             "SELECT sync_change_counter FROM moz_extension_data WHERE ext_id = 'ext_with_changes'",
         )?;
         assert_eq!(counter, 0);
-
-        let status: u8 = conn.conn().query_one(
-            "SELECT sync_status FROM moz_extension_data WHERE ext_id = 'ext_with_changes'",
-        )?;
-        assert_eq!(status, SyncStatus::Normal as u8);
         Ok(())
     }
 }

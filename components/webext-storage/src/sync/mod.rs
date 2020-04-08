@@ -17,16 +17,6 @@ use incoming::IncomingAction;
 
 type JsonMap = serde_json::Map<String, serde_json::Value>;
 
-// We use the same values as places. Note that some of these values are
-// duplicated in the schema.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-#[repr(u8)]
-pub enum SyncStatus {
-    Unknown = 0,
-    New = 1,
-    Normal = 2,
-}
-
 /// For use with `#[serde(skip_serializing_if = )]`
 #[inline]
 pub fn is_default<T: PartialEq + Default>(v: &T) -> bool {

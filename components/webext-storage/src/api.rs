@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::error::*;
-use crate::sync::SyncStatus;
 use rusqlite::Connection;
 use serde::{ser::SerializeMap, Serialize, Serializer};
 
@@ -48,13 +47,12 @@ fn save_to_db(conn: &Connection, ext_id: &str, val: &JsonValue) -> Result<()> {
     // Ideally we could work out how to convert to bytes once and use it in both
     // places.
     conn.execute_named(
-        "INSERT OR REPLACE INTO moz_extension_data(ext_id, data, sync_status, sync_change_counter)
-            VALUES (:ext_id, :data, :sync_status,
+        "INSERT OR REPLACE INTO moz_extension_data(ext_id, data, sync_change_counter)
+            VALUES (:ext_id, :data,
                     IFNULL((SELECT sync_change_counter FROM moz_extension_data WHERE ext_id = :ext_id), 0) + 1)",
         &[(":ext_id", &ext_id),
           (":data", &sval),
           (":data", &sval),
-          (":sync_status", &(SyncStatus::New as u8)),
           ],
     )?;
     Ok(())

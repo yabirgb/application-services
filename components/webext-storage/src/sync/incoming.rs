@@ -13,7 +13,7 @@ use sync_guid::Guid as SyncGuid;
 
 use crate::error::*;
 
-use super::{merge, JsonMap, ServerPayload, SyncStatus};
+use super::{merge, JsonMap, ServerPayload};
 
 // This module deals exclusively with the Map inside a JsonValue::Object().
 // This helper reads such a Map from a SQL row, ignoring anything which is
@@ -261,20 +261,16 @@ pub fn apply_actions<S: ?Sized + Interruptee>(
                 // The local record is probably already in this state, but let's
                 // be sure.
                 cext.execute_named_cached(
-                    "UPDATE moz_extension_data SET data = NULL, sync_status = :sync_status_new WHERE ext_id = :ext_id",
-                    &[
-                        (":ext_id", &item.ext_id),
-                        (":sync_status_new", &(SyncStatus::New as u8)),
-                    ]
+                    "UPDATE moz_extension_data SET data = NULL WHERE ext_id = :ext_id",
+                    &[(":ext_id", &item.ext_id)],
                 )?;
             }
             // We want to update the local record with 'data' and after this update the item no longer is considered dirty.
             IncomingAction::TakeRemote { data } => {
                 cext.execute_named_cached(
-                    "UPDATE moz_extension_data SET data = :data, sync_status = :sync_status_normal, sync_change_counter = 0 WHERE ext_id = :ext_id",
+                    "UPDATE moz_extension_data SET data = :data, sync_change_counter = 0 WHERE ext_id = :ext_id",
                     &[
                         (":ext_id", &item.ext_id),
-                        (":sync_status_normal", &(SyncStatus::Normal as u8)),
                         (":data", &serde_json::Value::Object(data).as_str()),
                     ]
                 )?;
@@ -289,10 +285,9 @@ pub fn apply_actions<S: ?Sized + Interruptee>(
                     serde_json::Value::Object(data.clone()).to_string()
                 );
                 cext.execute_named_cached(
-                    "UPDATE moz_extension_data SET data = :data, sync_status = :sync_status_normal, sync_change_counter = sync_change_counter + 1 WHERE ext_id = :ext_id",
+                    "UPDATE moz_extension_data SET data = :data, sync_change_counter = sync_change_counter + 1 WHERE ext_id = :ext_id",
                     &[
                         (":ext_id", &item.ext_id),
-                        (":sync_status_normal", &(SyncStatus::Normal as u8)),
                         (":data", &serde_json::Value::Object(data).to_string()),
                     ]
                 )?;
@@ -470,8 +465,8 @@ mod tests {
 
         conn.execute(
             r#"
-            INSERT INTO moz_extension_data (ext_id, sync_status, data)
-            VALUES ('ext_id', 2, NULL)
+            INSERT INTO moz_extension_data (ext_id, data)
+            VALUES ('ext_id', NULL)
         "#,
             NO_PARAMS,
         )?;
